@@ -12,5 +12,6 @@ RUN go build -o beyondauth *.go
 
 FROM alpine:latest
 RUN apk update && apk add ca-certificates
-COPY --from=builder /go/src/github.com/gnur/beyondauth/app /
+COPY --from=builder /go/src/github.com/gnur/beyondauth/beyondauth /
+EXPOSE 8080
 CMD ["./beyondauth"]

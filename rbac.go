@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/gnur/beyondauth/jwt"
@@ -16,19 +17,22 @@ import (
 // Conf is the basic config struct
 type Conf struct {
 	sync.RWMutex
-	OAuth       oauthConf
-	fqdn        string
-	cookieScope string
-	maxTokenAge string
-	Groups      map[string]group
-	Hosts       map[string]host
+	DefaultPublic bool
+	DisableHTTPS  bool
+	OAuth         oauthConf
+	Fqdn          string
+	CookieScope   string
+	Verbose       bool
+	MaxTokenAge   duration
+	Groups        map[string]group
+	Hosts         map[string]host
 }
 
 type oauthConf struct {
-	clientID       string
-	clientSecret   string
-	providerDomain string
-	nonce          string
+	ClientID       string
+	ClientSecret   string
+	ProviderDomain string
+	Nonce          string
 }
 
 type group struct {
@@ -47,13 +51,23 @@ type cidr struct {
 	net.IPNet
 }
 
+type duration struct {
+	time.Duration
+}
+
+func (d *duration) UnmarshalText(text []byte) error {
+	var err error
+	d.Duration, err = time.ParseDuration(string(text))
+	return err
+}
+
 func (c *cidr) UnmarshalText(text []byte) error {
 	_, subnet, err := net.ParseCIDR(string(text))
 	c.IPNet = *subnet
 	return err
 }
 
-func watchConfig(conf *BeyondauthConfig, path string) {
+func watchConfig(conf *Conf, path string) {
 	log.Debug("Starting conf watcher")
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -67,10 +81,10 @@ func watchConfig(conf *BeyondauthConfig, path string) {
 			case event := <-watcher.Events:
 				if event.Op&fsnotify.Create == fsnotify.Create && filepath.Base(event.Name) == "..data" {
 					//kubernetes configmaps get updated like this
-					loadConfig(conf, path)
+					loadConfig(conf, path, false)
 				} else if event.Op&fsnotify.Write == fsnotify.Write && event.Name == path {
 					//regular files get updated like this
-					loadConfig(conf, path)
+					loadConfig(conf, path, false)
 				}
 			case err := <-watcher.Errors:
 				log.Println("error:", err)
@@ -84,22 +98,26 @@ func watchConfig(conf *BeyondauthConfig, path string) {
 		log.Fatal(err)
 	}
 }
-func loadConfig(conf *BeyondauthConfig, path string) error {
+func loadConfig(conf *Conf, path string, init bool) error {
 	log.WithField("path", path).Info("Loading config")
-	var c BeyondauthConfig
+	var c Conf
 	_, err := toml.DecodeFile(path, &c)
 	if err != nil {
 		log.WithField("err", err).Error("invalid config")
 		return err
 	}
-	conf.Lock()
-	conf.Groups = c.Groups
-	conf.Hosts = c.Hosts
-	conf.Unlock()
+	if init {
+		*conf = c
+	} else {
+		conf.Lock()
+		conf.Groups = c.Groups
+		conf.Hosts = c.Hosts
+		conf.Unlock()
+	}
 	return nil
 }
 
-func (rules *BeyondauthConfig) requestAllowed(r *http.Request) (allowed bool, user string) {
+func (rules *Conf) requestAllowed(r *http.Request) (allowed bool, user string) {
 	var h host
 	var ok bool
 	var hostWithoutSub string

@@ -20,27 +20,4 @@ Every incoming requests is classified into groups, a user can be a member of mul
 
 ## example config
 
-```
-defaultPolicy = "deny" #default policy is always deny
-
-[groups.admin]
-domains = [ "gnur.nl" ]
-
-[groups.anyone]
-domains = [ "gmail.com", "example.com" ]
-
-[groups.internal]
-subnets = [ "10.0.0.0/8" ]
-
-[groups.superadmin]
-users = [ "boss@example.com" ]
-domains = [ "onlyceos.com" ]
-
-
-[hosts."s3.example.com"]
-public = true
-
-[hosts."traefik.example.com"]
-public = false
-allowedGroups = [ "admin" ]
-```
+see `example.toml`

@@ -56,54 +56,47 @@ type idtc struct {
 }
 
 var (
-	clientID       = os.Getenv("OAUTH2_CLIENT_ID")
-	clientSecret   = os.Getenv("OAUTH2_CLIENT_SECRET")
-	providerDomain = os.Getenv("OAUTH2_PROVIDER_DOMAIN")
-
-	nonce          = os.Getenv("OAUTH_NONCE")
-	fqdn           = os.Getenv("BEYONDAUTH_FQDN")
-	confFile       = os.Getenv("BEYONDAUTH_RULES_FILE")
-	cookieScope    = os.Getenv("BEYONDAUTH_COOKIE_DOMAIN")
-	maxTokenAgeEnv = os.Getenv("BEYONDAUTH_MAX_TOKEN_AGE")
-	maxTokenAge    time.Duration
+	confFile = os.Getenv("BEYONDAUTH_RULES_FILE")
 )
 
 func main() {
 	if confFile == "" {
-		log.Fatal("Could not get config file location from ENV, please set BEYONDAUTH_RULES_FILE")
-		return
+		log.Info("Could not get config file location from ENV using default: /etc/beyondauthconfig.toml")
+		confFile = "/etc/beyondauthconfig.toml"
 	}
-	conf := &BeyondauthConfig{}
+	conf := &Conf{}
 
-	err := loadConfig(conf, confFile)
+	err := loadConfig(conf, confFile, true)
 	if err != nil {
 		log.WithField("error", err).Fatal("Could not load config")
 		return
 	}
 	go watchConfig(conf, confFile)
 
-	maxTokenAge, err = time.ParseDuration(maxTokenAgeEnv)
-	if err != nil {
-		log.WithField("error", err).Warning("invalid BEYONDAUTH_MAX_TOKEN_AGE provided, using 24 hours as default")
-		maxTokenAge = 24 * time.Hour
+	if conf.Verbose {
+		log.SetLevel(log.DebugLevel)
 	}
 
 	ctx := context.Background()
 
-	provider, err := oidc.NewProvider(ctx, providerDomain)
+	provider, err := oidc.NewProvider(ctx, conf.OAuth.ProviderDomain)
 	if err != nil {
-		log.Fatal(err)
+		log.WithFields(log.Fields{
+			"provider": conf.OAuth.ProviderDomain,
+			"error":    err,
+			"config":   conf,
+		}).Fatal("Could not initialize provider")
 	}
 	oidcConfig := &oidc.Config{
-		ClientID: clientID,
+		ClientID: conf.OAuth.ClientID,
 	}
 	verifier := provider.Verifier(oidcConfig)
 
 	config := oauth2.Config{
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
+		ClientID:     conf.OAuth.ClientID,
+		ClientSecret: conf.OAuth.ClientSecret,
 		Endpoint:     provider.Endpoint(),
-		RedirectURL:  fqdn + "/auth/callback",
+		RedirectURL:  conf.Fqdn + "/auth/callback",
 		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
 	}
 
@@ -112,13 +105,13 @@ func main() {
 		cookie := http.Cookie{
 			Name:     "x-beyond-auth-state",
 			Value:    state,
-			Domain:   fqdn,
+			Domain:   conf.Fqdn,
 			HttpOnly: true,
-			Secure:   true,
+			Secure:   !conf.DisableHTTPS,
 			Path:     "/",
 		}
 		http.SetCookie(w, &cookie)
-		http.Redirect(w, r, config.AuthCodeURL(state, oidc.Nonce(nonce)), http.StatusFound)
+		http.Redirect(w, r, config.AuthCodeURL(state, oidc.Nonce(conf.OAuth.Nonce)), http.StatusFound)
 	})
 
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -179,7 +172,7 @@ func main() {
 			return
 		}
 
-		token, err := jwt.NewToken(resp.IDTokenClaims.Email, maxTokenAge)
+		token, err := jwt.NewToken(resp.IDTokenClaims.Email, conf.MaxTokenAge.Duration)
 		if err != nil {
 			log.WithField("err", err).Warning("could not create token")
 			http.Error(w, internalServerErrorText, http.StatusInternalServerError)
@@ -188,17 +181,37 @@ func main() {
 		cookie := http.Cookie{
 			Name:     "x-beyond-auth",
 			Value:    token,
-			Domain:   cookieScope,
+			Domain:   conf.CookieScope,
 			HttpOnly: true,
-			Secure:   true,
+			Secure:   !conf.DisableHTTPS,
 			Path:     "/",
-			Expires:  time.Now().Add(maxTokenAge),
+			Expires:  time.Now().Add(conf.MaxTokenAge.Duration),
 		}
 		http.SetCookie(w, &cookie)
+		log.WithFields(log.Fields{
+			"domain":      conf.CookieScope,
+			"redirecturl": string(redirectURL),
+		}).Debug("setting cookie")
+
 		http.Redirect(w, r, string(redirectURL), http.StatusFound)
 	})
 
 	http.HandleFunc("/verify", func(w http.ResponseWriter, r *http.Request) {
+
+		log.WithFields(log.Fields{
+			"x-forwarded-for":   r.Header.Get("x-forwarded-for"),
+			"x-forwarded-host":  r.Header.Get("x-forwarded-host"),
+			"x-forwarded-uri":   r.Header.Get("x-forwarded-uri"),
+			"x-forwarded-proto": r.Header.Get("x-forwarded-proto"),
+			"user-agent":        r.Header.Get("user-agent"),
+		}).Debug("Incoming request")
+		allowed, user := conf.requestAllowed(r)
+
+		if allowed {
+			w.Header().Set("X-Auth-User", user)
+			fmt.Fprintf(w, "%q", "ok")
+			return
+		}
 
 		_, err := r.Cookie("x-beyond-auth")
 		// cookie is set, so user is logged in
@@ -206,28 +219,13 @@ func main() {
 			// user is not logged in, authenticate
 			host := r.Header.Get("x-forwarded-host")
 			uri := r.Header.Get("x-forwarded-uri")
-			state := base64.RawURLEncoding.EncodeToString([]byte("https://" + host + uri))
-			http.Redirect(w, r, fqdn+"/login?target="+state, http.StatusFound)
+			proto := r.Header.Get("x-forwarded-proto")
+			state := base64.RawURLEncoding.EncodeToString([]byte(proto + "://" + host + uri))
+			http.Redirect(w, r, conf.Fqdn+"/login?target="+state, http.StatusFound)
 
 			return
 		}
 
-		allowed, user := conf.requestAllowed(r)
-		log.WithFields(log.Fields{
-			"allowed":           allowed,
-			"user":              user,
-			"x-forwarded-for":   r.Header.Get("x-forwarded-for"),
-			"x-forwarded-host":  r.Header.Get("x-forwarded-host"),
-			"x-forwarded-uri":   r.Header.Get("x-forwarded-uri"),
-			"x-forwarded-proto": r.Header.Get("x-forwarded-proto"),
-			"user-agent":        r.Header.Get("user-agent"),
-		}).Debug("Incoming request")
-
-		if allowed {
-			w.Header().Set("X-Auth-User", user)
-			fmt.Fprintf(w, "%q", "ok")
-			return
-		}
 		http.Error(w, "access denied", http.StatusForbidden)
 		return
 	})

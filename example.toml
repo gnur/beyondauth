@@ -1,0 +1,34 @@
+defaultPublic = false
+disableHTTPS = true
+cookieScope = ".docker.localhost"
+maxTokenAge = "240h"
+fqdn = "http://auth.docker.localhost"
+verbose = false
+
+[oauth]
+clientID = "beyondauth"
+clientSecret = "94f38ca7-837b-47d9-837c-510b5a907bc1"
+providerdomain = "http://keycloak:8080/auth/realms/testing"
+nonce = "E7KReAzYdtX6YDJx7"
+
+[groups.users]
+domains = [ "example.com" ]
+
+[groups.admin]
+users = [ "admin@example.com" ]
+
+[hosts."public.docker.localhost"]
+public = true
+
+[hosts."auth.docker.localhost"]
+public = true
+
+[hosts."private.docker.localhost"]
+public = false
+matchSubDomains = false
+allowedGroups = [ "users"]
+
+[hosts."superprivate.docker.localhost"]
+public = false
+matchSubDomains = false
+allowedGroups = [ "admin"]

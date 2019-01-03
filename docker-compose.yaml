@@ -1,42 +1,38 @@
 version: '3'
 services:
   beyondauth:
-    build:
-      context: .
-    environment:
-	    - OAUTH2_CLIENT_ID=
-	    - OAUTH2_CLIENT_SECRET=
-	    - OAUTH2_PROVIDER_DOMAIN=http://keycloack.localhost/
-	    - OAUTH_NONCE=n3rYTQRtf5svEGhmY
-	    - BEYONDAUTH_FQDN=http://auth.localhost/
-	    - BEYONDAUTH_RULES_FILE=rules.toml
-	    - BEYONDAUTH_COOKIE_DOMAIN=.docker.localhost
-	    - BEYONDAUTH_MAX_TOKEN_AGE=24h
+    image: gnur/beyondauth
     ports:
-     - 7132:7132
+    - 8084:8080
+    volumes:
+      - ./example.toml:/etc/beyondauthconfig.toml
+    labels:
+    - "traefik.frontend.rule=Host:auth.docker.localhost"
+    restart: on-failure
+
   keycloak:
-    image: jboss/keycloack
-    environment:
-	    - KEYCLOAK_PASSWORD=admin
-	    - KEYCLOAK_USER=admin
+    image: gnur/keycloak:testing
     ports:
      - 8080:8080
-  echo:
-    image: solsson/http-echo
-    environment:
-	    - PORT=8081
-    ports:
-     - 8081:8081
-		labels:
-		- "traefik.frontend.rule=Host:whoami.docker.localhost"
+    labels:
+    - "traefik.frontend.rule=Host:keycloak"
+
+
+  public:
+    image: gnur/snost
+    labels:
+    - "traefik.frontend.rule=Host:public.docker.localhost"
+  private:
+    image: gnur/snost
+    labels:
+    - "traefik.frontend.rule=Host:private.docker.localhost"
+    - "traefik.frontend.rule=Host:superprivate.docker.localhost"
 
   traefik:
     image: traefik  # The official Traefik docker image
-    command: --api --docker  # Enables the web UI and tells Traefik to listen to docker
     ports:
       - "80:80"      # The HTTP port
-      - "8080:8080"  # The Web UI (enabled by --api)
+      - "8083:8080"  # The Web UI (enabled by --api)
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock  # So that Traefik can listen to the Docker events
-
-#docker run -p 8080:8080 -e KEYCLOAK_USER=admin -e KEYCLOAK_PASSWORD=admin jboss/keycloak
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./traefik.toml:/etc/traefik/traefik.toml
