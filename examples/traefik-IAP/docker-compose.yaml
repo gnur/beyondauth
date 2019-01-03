@@ -1,0 +1,37 @@
+version: '3'
+services:
+  beyondauth:
+    image: gnur/beyondauth
+    ports:
+    - 8084:8080
+    volumes:
+      - ./example.toml:/etc/beyondauthconfig.toml
+    labels:
+    - "traefik.frontend.rule=Host:auth.docker.localhost"
+    restart: on-failure
+
+  keycloak:
+    image: gnur/keycloak:testing
+    ports:
+     - 8080:8080
+    labels:
+    - "traefik.frontend.rule=Host:keycloak"
+
+
+  public:
+    image: gnur/snost
+    labels:
+    - "traefik.frontend.rule=Host:public.docker.localhost"
+  private:
+    image: gnur/snost
+    labels:
+    - "traefik.frontend.rule=Host:private.docker.localhost"
+
+  traefik:
+    image: traefik  # The official Traefik docker image
+    ports:
+      - "80:80"      # The HTTP port
+      - "8083:8080"  # The Web UI (enabled by --api)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./traefik.toml:/etc/traefik/traefik.toml

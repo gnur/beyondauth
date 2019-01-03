@@ -1,0 +1,14 @@
+debug = false
+defaultEntryPoints = ["http"]
+
+[entryPoints]
+[entryPoints.http]
+address = ":80"
+compress = true
+[entryPoints.http.auth.forward]
+    authResponseHeaders = ["X-Auth-User"]
+    address = "http://beyondauth:8080/verify"
+
+
+[docker]
+endpoint = "unix:///var/run/docker.sock"
