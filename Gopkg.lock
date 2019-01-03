@@ -63,7 +63,7 @@
     "ssh/terminal",
   ]
   pruneopts = "UT"
-  revision = "505ab145d0a99da450461ae2c1a9f6cd10d1f447"
+  revision = "8d7daa0c54b357f3071e11eaef7efc4e19a417e2"
 
 [[projects]]
   branch = "master"
@@ -89,14 +89,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:d0c37951b9d5107f44e2222ba08311a113bf094a244544915eda6a3f87f12c45"
+  digest = "1:191cccd950a4aeadb60306062f2bdc2f924d750d0156ec6c691b17211bfd7349"
   name = "golang.org/x/sys"
   packages = [
     "unix",
     "windows",
   ]
   pruneopts = "UT"
-  revision = "8ff4e546d48be377a38a3ab13ef2dd4dd8dce06a"
+  revision = "82a175fd1598e8a172e58ebdf5ed262bb29129e5"
 
 [[projects]]
   digest = "1:6f3bd49ddf2e104e52062774d797714371fac1b8bddfd8e124ce78e6b2264a10"
@@ -131,7 +131,7 @@
   version = "v1.4.7"
 
 [[projects]]
-  digest = "1:feab1308bceeb3d0e078b1c10397f2ce3b9d6f030c209d46e8b6f62fc97f90f3"
+  digest = "1:377f8ccfbf9d7ff3997ea7454b894de46cd1d9fe6ec1e724c93ad59eb716c5c0"
   name = "gopkg.in/square/go-jose.v2"
   packages = [
     ".",
@@ -139,8 +139,8 @@
     "json",
   ]
   pruneopts = "UT"
-  revision = "72415094398e2f013bf50b76fd6de36df47938ea"
-  version = "v2.2.1"
+  revision = "e94fb177d3668d35ab39c61cbb2f311550557e83"
+  version = "v2.2.2"
 
 [solve-meta]
   analyzer-name = "dep"
