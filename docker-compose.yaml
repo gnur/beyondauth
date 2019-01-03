@@ -1,7 +1,8 @@
 version: '3'
 services:
   beyondauth:
-    image: gnur/beyondauth
+    build:
+      context: .
     ports:
     - 8084:8080
     volumes:
@@ -26,7 +27,6 @@ services:
     image: gnur/snost
     labels:
     - "traefik.frontend.rule=Host:private.docker.localhost"
-    - "traefik.frontend.rule=Host:superprivate.docker.localhost"
 
   traefik:
     image: traefik  # The official Traefik docker image
